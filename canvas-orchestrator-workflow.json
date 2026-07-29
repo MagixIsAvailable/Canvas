@@ -54,20 +54,19 @@
     },
     {
       "parameters": {
-        "fileName": "=/canvas-state/{{ $json.session_id }}.json",
-        "dataPropertyName": "data",
+        "fileContent": "={{ JSON.stringify($json, null, 2) }}",
+        "fileName": "/canvas-state/{{ $json.session_id }}.json",
         "options": {}
       },
       "id": "a1b2c3d4-e004-4004-8004-000000000004",
       "name": "Write Session State",
-      "type": "n8n-nodes-base.writeBinaryFile",
+      "type": "n8n-nodes-base.writeFile",
       "typeVersion": 1,
       "position": [1150, 150]
     },
     {
       "parameters": {
-        "respondWith": "json",
-        "responseBody": "={\n  \"session_id\": \"{{ $json.session_id }}\",\n  \"status\": \"{{ $json.status }}\",\n  \"goal\": \"{{ $json.goal }}\",\n  \"tasks\": {{ JSON.stringify($json.tasks) }},\n  \"approval_required\": {{ $json.approval_required }},\n  \"approval_question\": \"{{ $json.approval_question }}\",\n  \"confidence\": {{ $json.confidence }},\n  \"mode\": \"{{ $json.mode }}\"\n}",
+        "respondWith": "allIncomingData",
         "options": {}
       },
       "id": "a1b2c3d4-e005-4005-8005-000000000005",
@@ -75,6 +74,18 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
       "position": [1150, 500]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"status\": \"error\",\n  \"message\": \"{{ $json.message }}\"\n}",
+        "options": {}
+      },
+      "id": "a1b2c3d4-e006-4006-8006-000000000006",
+      "name": "Error Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [850, 600]
     }
   ],
   "connections": {
@@ -89,6 +100,18 @@
       "main": [
         [
           { "node": "Parse & Validate", "type": "main", "index": 0 }
+        ]
+      ],
+      "error": [
+        [
+          { "node": "Error Response", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Parse & Validate": {
+      "error": [
+        [
+          { "node": "Error Response", "type": "main", "index": 0 }
         ]
       ]
     },
