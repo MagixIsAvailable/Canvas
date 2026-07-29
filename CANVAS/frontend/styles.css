@@ -639,3 +639,32 @@ input[type=range]::-webkit-slider-thumb {
   border-color: var(--amber);
   color: var(--amber);
 }
+
+/* Connection banner */
+.connection-banner {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  padding: 2px 10px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+.connection-banner.live {
+  color: var(--accent);
+  background: rgba(200,245,100,0.10);
+  border: 1px solid var(--accent-dim);
+}
+
+.connection-banner.demo {
+  color: var(--amber);
+  background: rgba(255,170,51,0.08);
+  border: 1px solid var(--amber);
+  animation: pulse 1.8s ease-in-out infinite;
+}
+
+.connection-banner.checking {
+  color: var(--text-dim);
+  background: transparent;
+  border: 1px solid var(--border);
+}

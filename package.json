@@ -1,0 +1,26 @@
+{
+  "name": "canvas",
+  "version": "1.0.0",
+  "description": "CANVAS is a local multi-agent creative agency that runs entirely on your machine. It uses **n8n** as the workflow engine, **LM Studio** as the LLM runtime, and **TouchDesigner** as the visual output target. You give it a single creative brief, and a director model decomposes it into tasks, dispatches them to specialist agents, and delivers HTML essays, WebXR scenes, data visualisations, and TouchDesigner parameter networks — all while keeping a human in the loop for approval.",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MagixIsAvailable/Canvas.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/MagixIsAvailable/Canvas/issues"
+  },
+  "homepage": "https://github.com/MagixIsAvailable/Canvas#readme",
+  "dependencies": {
+    "express": "^5.2.1",
+    "http-proxy-middleware": "^3.0.7"
+  }
+}
