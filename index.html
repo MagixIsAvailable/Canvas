@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CANVAS — Creative Agency</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header>
+  <div class="logo">CANVAS <span>creative agency</span></div>
+  <div class="header-status">
+    <div class="session-id" id="sessionId">no active session</div>
+    <button class="interrupt-btn" id="interruptBtn" onclick="interrupt()">⏸ interrupt</button>
+    <div class="mode-toggle">
+      <button class="mode-btn active" onclick="setMode('collaborative', this)">collaborative</button>
+      <button class="mode-btn" onclick="setMode('director', this)">director</button>
+    </div>
+  </div>
+</header>
+
+<div class="main">
+
+  <!-- Left — agents -->
+  <div class="agents-panel">
+    <div class="panel-label">agency roster</div>
+
+    <div class="agent-row active" id="agent-canvas">
+      <div class="agent-dot"></div>
+      <div class="agent-info">
+        <div class="agent-name">canvas director</div>
+        <div class="agent-task">awaiting brief</div>
+      </div>
+      <div class="agent-model">27B</div>
+    </div>
+
+    <div class="agents-divider"></div>
+    <div class="panel-label" style="margin-top:4px;">specialist agents</div>
+
+    <div class="agent-row" id="agent-research">
+      <div class="agent-dot"></div>
+      <div class="agent-info">
+        <div class="agent-name">research agent</div>
+        <div class="agent-task">idle</div>
+      </div>
+      <div class="agent-model">7B</div>
+    </div>
+
+    <div class="agent-row" id="agent-writer">
+      <div class="agent-dot"></div>
+      <div class="agent-info">
+        <div class="agent-name">writer agent</div>
+        <div class="agent-task">idle</div>
+      </div>
+      <div class="agent-model">27B</div>
+    </div>
+
+    <div class="agent-row" id="agent-code">
+      <div class="agent-dot"></div>
+      <div class="agent-info">
+        <div class="agent-name">code agent</div>
+        <div class="agent-task">idle</div>
+      </div>
+      <div class="agent-model">32B</div>
+    </div>
+
+    <div class="agent-row" id="agent-data">
+      <div class="agent-dot"></div>
+      <div class="agent-info">
+        <div class="agent-name">data agent</div>
+        <div class="agent-task">idle</div>
+      </div>
+      <div class="agent-model">7B</div>
+    </div>
+
+    <div class="agent-row" id="agent-dataviz">
+      <div class="agent-dot"></div>
+      <div class="agent-info">
+        <div class="agent-name">dataviz agent</div>
+        <div class="agent-task">idle</div>
+      </div>
+      <div class="agent-model">32B</div>
+    </div>
+
+    <div class="agent-row" id="agent-td">
+      <div class="agent-dot"></div>
+      <div class="agent-info">
+        <div class="agent-name">td agent</div>
+        <div class="agent-task">idle</div>
+      </div>
+      <div class="agent-model">27B</div>
+    </div>
+
+    <div class="agents-divider"></div>
+    <div class="panel-label" style="margin-top:4px;">review layer</div>
+
+    <div class="agent-row" id="agent-critique">
+      <div class="agent-dot"></div>
+      <div class="agent-info">
+        <div class="agent-name">critique agent</div>
+        <div class="agent-task">idle</div>
+      </div>
+      <div class="agent-model">R1</div>
+    </div>
+
+    <div class="agent-row" id="agent-qa">
+      <div class="agent-dot"></div>
+      <div class="agent-info">
+        <div class="agent-name">qa agent</div>
+        <div class="agent-task">idle</div>
+      </div>
+      <div class="agent-model">4B</div>
+    </div>
+
+    <div class="agents-divider"></div>
+
+    <div class="agent-row" id="agent-state">
+      <div class="agent-dot"></div>
+      <div class="agent-info">
+        <div class="agent-name">state agent</div>
+        <div class="agent-task">idle</div>
+      </div>
+      <div class="agent-model">rule</div>
+    </div>
+
+    <div class="threshold-control">
+      <div class="threshold-label">
+        <span class="threshold-name">confidence threshold</span>
+        <span class="threshold-val" id="thresholdVal">70</span>
+      </div>
+      <input type="range" min="30" max="95" value="70" step="5" id="thresholdSlider"
+        oninput="document.getElementById('thresholdVal').textContent = this.value">
+    </div>
+  </div>
+
+  <!-- Center — workspace -->
+  <div class="workspace">
+    <div class="prompt-area">
+      <div class="prompt-label">master prompt</div>
+      <div class="prompt-input-row">
+        <textarea class="prompt-input" id="promptInput" rows="1"
+          placeholder="Describe your creative brief... the agency will decompose and execute it."
+          oninput="autoResize(this)"></textarea>
+        <button class="run-btn" onclick="runCanvas()">RUN ↗</button>
+      </div>
+    </div>
+
+    <div class="pipeline-bar" id="pipelineBar">
+      <div class="pipeline-step waiting">
+        <div class="pipeline-step-dot"></div>
+        <div class="pipeline-step-name">brief</div>
+      </div>
+      <div class="pipeline-arrow">→</div>
+      <div class="pipeline-step waiting">
+        <div class="pipeline-step-dot"></div>
+        <div class="pipeline-step-name">decompose</div>
+      </div>
+      <div class="pipeline-arrow">→</div>
+      <div class="pipeline-step waiting">
+        <div class="pipeline-step-dot"></div>
+        <div class="pipeline-step-name">approve</div>
+      </div>
+      <div class="pipeline-arrow">→</div>
+      <div class="pipeline-step waiting">
+        <div class="pipeline-step-dot"></div>
+        <div class="pipeline-step-name">research</div>
+      </div>
+      <div class="pipeline-arrow">→</div>
+      <div class="pipeline-step waiting">
+        <div class="pipeline-step-dot"></div>
+        <div class="pipeline-step-name">write</div>
+      </div>
+      <div class="pipeline-arrow">→</div>
+      <div class="pipeline-step waiting">
+        <div class="pipeline-step-dot"></div>
+        <div class="pipeline-step-name">build</div>
+      </div>
+      <div class="pipeline-arrow">→</div>
+      <div class="pipeline-step waiting">
+        <div class="pipeline-step-dot"></div>
+        <div class="pipeline-step-name">critique</div>
+      </div>
+      <div class="pipeline-arrow">→</div>
+      <div class="pipeline-step waiting">
+        <div class="pipeline-step-dot"></div>
+        <div class="pipeline-step-name">deliver</div>
+      </div>
+    </div>
+
+    <div class="activity-feed" id="activityFeed">
+      <div class="empty-state">
+        canvas is ready<br>
+        enter a brief and run the agency
+      </div>
+    </div>
+
+    <div class="approval-panel" id="approvalPanel" style="display:none;">
+      <div class="approval-label">⬡ awaiting approval</div>
+      <div class="approval-question" id="approvalQuestion"></div>
+      <div class="approval-task-list" id="approvalTaskList"></div>
+      <div class="approval-actions">
+        <button class="btn-approve" onclick="approve()">Approve</button>
+        <button class="btn-modify" onclick="modify()">Modify</button>
+        <button class="btn-reject" onclick="reject()">Reject</button>
+        <div class="confidence-badge">
+          canvas confidence <span class="confidence-value" id="confidenceVal">—</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right — outputs -->
+  <div class="output-panel">
+    <div class="panel-label">outputs</div>
+
+    <div class="output-section">
+      <div class="output-item" id="out-essay">
+        <div class="output-item-header">
+          <div class="output-type">html essay</div>
+          <div class="output-status waiting" id="out-essay-status">waiting</div>
+        </div>
+        <div class="output-desc">Long-form interactive essay with embedded visualisations</div>
+      </div>
+
+      <div class="output-item" id="out-webxr">
+        <div class="output-item-header">
+          <div class="output-type">webxr scene</div>
+          <div class="output-status waiting" id="out-webxr-status">waiting</div>
+        </div>
+        <div class="output-desc">Spatial environment for Quest 3 browser</div>
+      </div>
+
+      <div class="output-item" id="out-dataviz">
+        <div class="output-item-header">
+          <div class="output-type">data viz</div>
+          <div class="output-status waiting" id="out-dataviz-status">waiting</div>
+        </div>
+        <div class="output-desc">D3 / interactive charts from structured data</div>
+      </div>
+
+      <div class="output-item" id="out-td">
+        <div class="output-item-header">
+          <div class="output-type">td network</div>
+          <div class="output-status waiting" id="out-td-status">waiting</div>
+        </div>
+        <div class="output-desc">TouchDesigner parameter mapping + OSC routing</div>
+      </div>
+
+      <div class="output-item" id="out-narrative">
+        <div class="output-item-header">
+          <div class="output-type">narrative</div>
+          <div class="output-status waiting" id="out-narrative-status">waiting</div>
+        </div>
+        <div class="output-desc">Written story layer for the full artifact</div>
+      </div>
+    </div>
+
+    <div class="panel-label" style="margin-top: 8px;">session log</div>
+    <div class="output-section">
+      <div class="output-item" id="out-provenance">
+        <div class="output-item-header">
+          <div class="output-type">provenance manifest</div>
+          <div class="output-status waiting" id="out-provenance-status">waiting</div>
+        </div>
+        <div class="output-desc">Full decision trail — who made what, when, with what confidence</div>
+      </div>
+
+      <div class="output-item" id="out-decisions">
+        <div class="output-item-header">
+          <div class="output-type">decision digest</div>
+          <div class="output-status waiting" id="out-decisions-status">waiting</div>
+        </div>
+        <div class="output-desc">Autonomous decisions made by canvas this session</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
