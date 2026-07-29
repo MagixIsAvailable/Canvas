@@ -54,14 +54,12 @@
     },
     {
       "parameters": {
-        "fileContent": "={{ JSON.stringify($json, null, 2) }}",
-        "fileName": "/canvas-state/{{ $json.session_id }}.json",
-        "options": {}
+        "jsCode": "const fs = require('fs');\nconst path = require('path');\n\nconst sessionData = $input.first().json;\nconst dir = '/canvas-state';\nconst filePath = path.join(dir, `${sessionData.session_id}.json`);\n\n// Create directory if it doesn't exist\nif (!fs.existsSync(dir)) {\n  fs.mkdirSync(dir, { recursive: true });\n}\n\n// Append-only — never overwrite existing session\nif (!fs.existsSync(filePath)) {\n  fs.writeFileSync(filePath, JSON.stringify(sessionData, null, 2), 'utf8');\n}\n\nreturn [{ json: { ...sessionData, state_written: true, file_path: filePath } }];"
       },
       "id": "c004-4004-8004-0000-000000000004",
       "name": "Write Session State",
-      "type": "n8n-nodes-base.writeFile",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [1150, 150]
     },
     {
@@ -113,24 +111,13 @@
     },
     {
       "parameters": {
-        "filePath": "={{ $json.filePath }}",
-        "options": {}
-      },
-      "id": "c009-4009-8009-0000-000000000009",
-      "name": "Read Session State",
-      "type": "n8n-nodes-base.readFile",
-      "typeVersion": 1,
-      "position": [2350, 300]
-    },
-    {
-      "parameters": {
-        "jsCode": "// ── Parse JSON from readFile ──\n// Load-bearing: downstream IF node needs structured JSON\nconst raw = $input.first().json;\nlet sessionState;\ntry {\n  sessionState = JSON.parse(raw.fileContent);\n} catch (e) {\n  throw new Error(`Failed to parse session state: ${e.message}`);\n}\n\nconst decision = $('Parse Resume').first().json.decision;\nconst sessionId = $('Parse Resume').first().json.session_id;\n\nlet updatedState = { ...sessionState, decision, decided_at: new Date().toISOString() };\n\nswitch (decision) {\n  case 'approve':\n    updatedState.status = 'running';\n    updatedState.approved_at = new Date().toISOString();\n    break;\n  case 'reject':\n    updatedState.status = 'rejected';\n    updatedState.rejected_at = new Date().toISOString();\n    break;\n  case 'modify':\n    updatedState.status = 'modification_requested';\n    updatedState.modified_at = new Date().toISOString();\n    break;\n}\n\nreturn [{\n  json: {\n    session_id: sessionId,\n    decision: decision,\n    goal: sessionState.goal,\n    tasks: sessionState.tasks,\n    updatedState: updatedState\n  }\n}];"
+        "jsCode": "const fs = require('fs');\n\nconst decision = $('Parse Resume').first().json.decision;\nconst sessionId = $('Parse Resume').first().json.session_id;\nconst filePath = `/canvas-state/${sessionId}.json`;\n\nif (!fs.existsSync(filePath)) {\n  throw new Error(`Session file not found: ${filePath}`);\n}\n\nconst raw = fs.readFileSync(filePath, 'utf8');\nconst sessionState = JSON.parse(raw);\n\nlet updatedState = { ...sessionState, decision, decided_at: new Date().toISOString() };\n\nswitch (decision) {\n  case 'approve':\n    updatedState.status = 'running';\n    updatedState.approved_at = new Date().toISOString();\n    break;\n  case 'reject':\n    updatedState.status = 'rejected';\n    updatedState.rejected_at = new Date().toISOString();\n    break;\n  case 'modify':\n    updatedState.status = 'modification_requested';\n    updatedState.modified_at = new Date().toISOString();\n    break;\n}\n\nreturn [{\n  json: {\n    session_id: sessionId,\n    decision: decision,\n    goal: sessionState.goal,\n    tasks: sessionState.tasks,\n    updatedState: updatedState\n  }\n}];"
       },
       "id": "c010-4010-8010-0000-000000000010",
-      "name": "Process Decision",
+      "name": "Read & Process Decision",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2650, 300]
+      "position": [2350, 300]
     },
     {
       "parameters": {
@@ -161,14 +148,12 @@
     },
     {
       "parameters": {
-        "fileName": "/canvas-state/{{ $json.updatedState.session_id }}.json",
-        "fileContent": "={{ JSON.stringify($json.updatedState, null, 2) }}",
-        "options": {}
+        "jsCode": "const fs = require('fs');\nconst path = require('path');\n\nconst data = $input.first().json;\nconst dir = '/canvas-state';\nconst filePath = path.join(dir, `${data.updatedState.session_id}.json`);\n\n// Create directory if it doesn't exist\nif (!fs.existsSync(dir)) {\n  fs.mkdirSync(dir, { recursive: true });\n}\n\nfs.writeFileSync(filePath, JSON.stringify(data.updatedState, null, 2), 'utf8');\n\nreturn [{ json: { ...data, state_updated: true, file_path: filePath } }];"
       },
       "id": "c012-4012-8012-0000-000000000012",
       "name": "Update Session State",
-      "type": "n8n-nodes-base.writeFile",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [3250, 300]
     },
     {
@@ -246,18 +231,11 @@
     "Parse Resume": {
       "main": [
         [
-          { "node": "Read Session State", "type": "main", "index": 0 }
+          { "node": "Read & Process Decision", "type": "main", "index": 0 }
         ]
       ]
     },
-    "Read Session State": {
-      "main": [
-        [
-          { "node": "Process Decision", "type": "main", "index": 0 }
-        ]
-      ]
-    },
-    "Process Decision": {
+    "Read & Process Decision": {
       "main": [
         [
           { "node": "IF Decision", "type": "main", "index": 0 }
