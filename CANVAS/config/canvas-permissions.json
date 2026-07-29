@@ -1,0 +1,78 @@
+{
+  "orchestrator": {
+    "model": "penai/gpt-oss-20b",
+    "reasoning_effort": "medium",
+    "temperature": 0.3,
+    "max_tokens": 4096,
+    "stream": false,
+    "endpoint": "http://localhost:1234/v1/chat/completions",
+    "timeout_ms": 120000,
+    "system_prompt": "You are a creative project orchestrator for CANVAS agency. Given a creative brief, decompose it into specific tasks for specialist agents. Return ONLY valid JSON, no preamble.\n\nAgents: research_agent, writer_agent, code_agent, data_agent, dataviz_agent, td_agent, critique_agent, qa_agent\n\nSchema:\n{\n  \"goal\": \"one sentence summary\",\n  \"tasks\": [{ \"agent\": \"\", \"task\": \"\", \"depends_on\": [], \"parallel_with\": [] }],\n  \"approval_required\": true,\n  \"approval_question\": \"question for human\",\n  \"confidence\": 0-100\n}"
+  },
+  "agents": {
+    "research_agent": {
+      "model": "penai/gpt-oss-20b",
+      "allowed_tools": ["web_search", "fetch_page", "extract_text", "summarize"],
+      "output_sanitize": true,
+      "max_retries": 3
+    },
+    "writer_agent": {
+      "model": "penai/gpt-oss-20b",
+      "allowed_tools": ["generate_copy", "rewrite", "translate", "summarize"],
+      "max_retries": 2
+    },
+    "code_agent": {
+      "model": "penai/gpt-oss-20b",
+      "allowed_tools": ["generate_code", "review_code", "debug", "refactor"],
+      "sandboxed": true,
+      "max_retries": 3
+    },
+    "data_agent": {
+      "model": "penai/gpt-oss-20b",
+      "allowed_tools": ["query_data", "analyze", "transform", "validate_schema"],
+      "max_retries": 2
+    },
+    "dataviz_agent": {
+      "model": "penai/gpt-oss-20b",
+      "allowed_tools": ["generate_chart", "export_svg", "export_png", "render_plotly"],
+      "max_retries": 2
+    },
+    "td_agent": {
+      "model": "penai/gpt-oss-20b",
+      "allowed_tools": ["architect_system", "design_pipeline", "optimize_workflow", "provision_resource"],
+      "max_retries": 3
+    },
+    "critique_agent": {
+      "model": "penai/gpt-oss-20b",
+      "allowed_tools": ["review_output", "score_quality", "suggest_improvements", "compare_versions"],
+      "max_retries": 2
+    },
+    "qa_agent": {
+      "model": "penai/gpt-oss-20b",
+      "allowed_tools": ["run_tests", "lint", "audit_security", "validate_output"],
+      "max_retries": 3
+    }
+  },
+  "state_agent": {
+    "model": "penai/gpt-oss-20b",
+    "sole_writer": true,
+    "allowed_tools": ["read_state", "write_state", "merge_state", "archive_session"],
+    "state_dir": "./canvas-state"
+  },
+  "approval": {
+    "required_by_default": true,
+    "confidence_threshold": 50,
+    "decisions": ["approve", "modify", "reject"],
+    "webhook_path": "/canvas-approve"
+  },
+  "sanitization": {
+    "strip_tags": true,
+    "blocked_patterns": ["<script", "javascript:", "onerror=", "onload=", "<iframe", "<object", "<embed"],
+    "allowed_mime_types": ["text/plain", "text/html", "application/json", "text/markdown", "image/png", "image/svg+xml"]
+  },
+  "logging": {
+    "level": "info",
+    "output": "./canvas-state/sessions.log",
+    "format": "json"
+  }
+}

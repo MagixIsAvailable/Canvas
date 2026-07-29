@@ -1,0 +1,295 @@
+{
+  "name": "CANVAS Master Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "canvas-orchestrate",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "c001-4001-8001-0000-000000000001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:1234/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"model\": \"penai/gpt-oss-20b\",\n  \"reasoning_effort\": \"medium\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You are a creative project orchestrator for CANVAS agency. Given a creative brief, decompose it into specific tasks for specialist agents. Return ONLY valid JSON, no preamble.\\n\\nAgents: research_agent, writer_agent, code_agent, data_agent, dataviz_agent, td_agent, critique_agent, qa_agent\\n\\nSchema:\\n{\\n  \\\"goal\\\": \\\"one sentence summary\\\",\\n  \\\"tasks\\\": [{ \\\"agent\\\": \\\"\\\", \\\"task\\\": \\\"\\\", \\\"depends_on\\\": [], \\\"parallel_with\\\": [] }],\\n  \\\"approval_required\\\": true,\\n  \\\"approval_question\\\": \\\"question for human\\\",\\n  \\\"confidence\\\": 0-100\\n}\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"={{ $json.body.prompt }}\"\n    }\n  ],\n  \"temperature\": 0.3,\n  \"max_tokens\": 4096,\n  \"stream\": false\n}",
+        "options": {
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "c002-4002-8002-0000-000000000002",
+      "name": "LM Studio Chat",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [550, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ── Parse & Validate Orchestrator Response ──\nconst httpResponse = $input.first().json;\n\nlet rawContent = '';\ntry {\n  rawContent = httpResponse.choices[0].message.content;\n} catch (e) {\n  throw new Error('Invalid LM Studio response format: missing choices[0].message.content');\n}\n\nlet cleaned = rawContent.trim();\nif (cleaned.startsWith('```')) {\n  cleaned = cleaned.replace(/^```(?:json)?\\s*/i, '').replace(/\\s*```$/, '').trim();\n}\n\nlet parsed;\ntry {\n  parsed = JSON.parse(cleaned);\n} catch (e) {\n  throw new Error(`Failed to parse orchestrator JSON: ${e.message}\\nRaw: ${rawContent.substring(0, 500)}`);\n}\n\nconst requiredFields = ['goal', 'tasks', 'approval_required', 'confidence'];\nconst missing = requiredFields.filter(f => !(f in parsed));\nif (missing.length > 0) {\n  throw new Error(`Missing required fields: ${missing.join(', ')}`);\n}\n\nif (!Array.isArray(parsed.tasks)) {\n  throw new Error('\"tasks\" must be an array');\n}\nif (parsed.tasks.length === 0) {\n  throw new Error('\"tasks\" array is empty — at least one task is required');\n}\n\nconst validAgents = ['research_agent', 'writer_agent', 'code_agent', 'data_agent', 'dataviz_agent', 'td_agent', 'critique_agent', 'qa_agent'];\nfor (let i = 0; i < parsed.tasks.length; i++) {\n  const task = parsed.tasks[i];\n  if (!task.agent || !validAgents.includes(task.agent)) {\n    throw new Error(`Task ${i}: invalid or missing agent \"${task.agent}\". Must be one of: ${validAgents.join(', ')}`);\n  }\n  if (!task.task || typeof task.task !== 'string') {\n    throw new Error(`Task ${i}: missing or invalid \"task\" description`);\n  }\n  if (!Array.isArray(task.depends_on)) task.depends_on = [];\n  if (!Array.isArray(task.parallel_with)) task.parallel_with = [];\n}\n\nif (typeof parsed.confidence !== 'number' || parsed.confidence < 0 || parsed.confidence > 100) {\n  throw new Error('\"confidence\" must be a number between 0 and 100');\n}\n\nconst threshold = $input.first().json.body?.confidence_threshold ?? 50;\nif (parsed.confidence < threshold) {\n  throw new Error(`Confidence (${parsed.confidence}) is below threshold (${threshold}). Refusing to proceed.`);\n}\n\nconst enriched = {\n  ...parsed,\n  session_id: $input.first().json.body?.session_id || ('canvas-' + Date.now()),\n  mode: $input.first().json.body?.mode || 'collaborative',\n  status: 'awaiting_approval',\n  created_at: new Date().toISOString(),\n  orchestrator_model: 'penai/gpt-oss-20b'\n};\n\nreturn [{ json: enriched }];"
+      },
+      "id": "c003-4003-8003-0000-000000000003",
+      "name": "Parse & Validate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "fileContent": "={{ JSON.stringify($json, null, 2) }}",
+        "fileName": "/canvas-state/{{ $json.session_id }}.json",
+        "options": {}
+      },
+      "id": "c004-4004-8004-0000-000000000004",
+      "name": "Write Session State",
+      "type": "n8n-nodes-base.writeFile",
+      "typeVersion": 1,
+      "position": [1150, 150]
+    },
+    {
+      "parameters": {
+        "respondWith": "allIncomingData",
+        "options": {}
+      },
+      "id": "c005-4005-8005-0000-000000000005",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1450, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"status\": \"error\",\n  \"message\": \"{{ $json.message }}\"\n}",
+        "options": {}
+      },
+      "id": "c006-4006-8006-0000-000000000006",
+      "name": "Error Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [850, 600]
+    },
+    {
+      "parameters": {
+        "resume": "webhook",
+        "options": {
+          "webhookSuffix": "canvas-approve-resume"
+        }
+      },
+      "id": "c007-4007-8007-0000-000000000007",
+      "name": "Wait for Approval",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [1750, 300],
+      "webhookId": "c007-resume-webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ── Process Resume Payload ──\n// The Wait node resumes with the webhook body as input\nconst resumeData = $input.first().json.body || $input.first().json;\n\nconst decision = (resumeData.decision || '').toLowerCase();\nconst sessionId = resumeData.session_id;\n\nif (!sessionId) {\n  throw new Error('Resume payload missing session_id');\n}\n\nconst validDecisions = ['approve', 'modify', 'reject'];\nif (!validDecisions.includes(decision)) {\n  throw new Error(`Invalid decision \"${decision}\". Must be one of: ${validDecisions.join(', ')}`);\n}\n\n// Re-read the session state file from disk to get the latest task plan\n// The Read Session State node will handle this — we just pass forward\nreturn [{\n  json: {\n    session_id: sessionId,\n    decision: decision,\n    filePath: `/canvas-state/${sessionId}.json`\n  }\n}];"
+      },
+      "id": "c008-4008-8008-0000-000000000008",
+      "name": "Parse Resume",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2050, 300]
+    },
+    {
+      "parameters": {
+        "filePath": "={{ $json.filePath }}",
+        "options": {}
+      },
+      "id": "c009-4009-8009-0000-000000000009",
+      "name": "Read Session State",
+      "type": "n8n-nodes-base.readFile",
+      "typeVersion": 1,
+      "position": [2350, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ── Parse JSON from readFile ──\n// Load-bearing: downstream IF node needs structured JSON\nconst raw = $input.first().json;\nlet sessionState;\ntry {\n  sessionState = JSON.parse(raw.fileContent);\n} catch (e) {\n  throw new Error(`Failed to parse session state: ${e.message}`);\n}\n\nconst decision = $('Parse Resume').first().json.decision;\nconst sessionId = $('Parse Resume').first().json.session_id;\n\nlet updatedState = { ...sessionState, decision, decided_at: new Date().toISOString() };\n\nswitch (decision) {\n  case 'approve':\n    updatedState.status = 'running';\n    updatedState.approved_at = new Date().toISOString();\n    break;\n  case 'reject':\n    updatedState.status = 'rejected';\n    updatedState.rejected_at = new Date().toISOString();\n    break;\n  case 'modify':\n    updatedState.status = 'modification_requested';\n    updatedState.modified_at = new Date().toISOString();\n    break;\n}\n\nreturn [{\n  json: {\n    session_id: sessionId,\n    decision: decision,\n    goal: sessionState.goal,\n    tasks: sessionState.tasks,\n    updatedState: updatedState\n  }\n}];"
+      },
+      "id": "c010-4010-8010-0000-000000000010",
+      "name": "Process Decision",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2650, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-approve",
+              "leftValue": "={{ $json.decision }}",
+              "rightValue": "approve",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "c011-4011-8011-0000-000000000011",
+      "name": "IF Decision",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2950, 300]
+    },
+    {
+      "parameters": {
+        "fileName": "/canvas-state/{{ $json.updatedState.session_id }}.json",
+        "fileContent": "={{ JSON.stringify($json.updatedState, null, 2) }}",
+        "options": {}
+      },
+      "id": "c012-4012-8012-0000-000000000012",
+      "name": "Update Session State",
+      "type": "n8n-nodes-base.writeFile",
+      "typeVersion": 1,
+      "position": [3250, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"session_id\": \"{{ $json.session_id }}\",\n  \"status\": \"{{ $json.decision === 'approve' ? 'approved' : $json.decision === 'reject' ? 'rejected' : 'modification_requested' }}\",\n  \"next\": \"{{ $json.decision === 'approve' ? 'agents_dispatched' : 'terminated' }}\",\n  \"goal\": \"{{ $json.goal }}\",\n  \"tasks\": {{ JSON.stringify($json.tasks || []) }},\n  \"message\": \"{{ $json.decision === 'approve' ? 'Session approved — agents dispatched.' : $json.decision === 'reject' ? 'Session rejected.' : 'Modification requested.' }}\"\n}",
+        "options": {}
+      },
+      "id": "c013-4013-8013-0000-000000000013",
+      "name": "Final Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [3550, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"session_id\": \"{{ $json.session_id }}\",\n  \"status\": \"rejected_or_modify\",\n  \"next\": \"terminated\",\n  \"message\": \"{{ $json.decision === 'reject' ? 'Session rejected.' : 'Modification requested — re-submit with adjustments.' }}\"\n}",
+        "options": {}
+      },
+      "id": "c014-4014-8014-0000-000000000014",
+      "name": "Reject/Modify Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [3250, 550]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          { "node": "LM Studio Chat", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "LM Studio Chat": {
+      "main": [
+        [
+          { "node": "Parse & Validate", "type": "main", "index": 0 }
+        ]
+      ],
+      "error": [
+        [
+          { "node": "Error Response", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Parse & Validate": {
+      "main": [
+        [
+          { "node": "Write Session State", "type": "main", "index": 0 },
+          { "node": "Respond to Webhook", "type": "main", "index": 0 }
+        ]
+      ],
+      "error": [
+        [
+          { "node": "Error Response", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Respond to Webhook": {
+      "main": [
+        [
+          { "node": "Wait for Approval", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Wait for Approval": {
+      "main": [
+        [
+          { "node": "Parse Resume", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Parse Resume": {
+      "main": [
+        [
+          { "node": "Read Session State", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Read Session State": {
+      "main": [
+        [
+          { "node": "Process Decision", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Process Decision": {
+      "main": [
+        [
+          { "node": "IF Decision", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "IF Decision": {
+      "main": [
+        [
+          { "node": "Update Session State", "type": "main", "index": 0 }
+        ],
+        [
+          { "node": "Reject/Modify Response", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Update Session State": {
+      "main": [
+        [
+          { "node": "Final Response", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "versionId": "2.0.0",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "meta": {
+    "instanceId": "canvas-master"
+  }
+}
