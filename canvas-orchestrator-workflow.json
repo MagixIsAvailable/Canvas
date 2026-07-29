@@ -109,17 +109,15 @@
       ]
     },
     "Parse & Validate": {
-      "error": [
-        [
-          { "node": "Error Response", "type": "main", "index": 0 }
-        ]
-      ]
-    },
-    "Parse & Validate": {
       "main": [
         [
           { "node": "Write Session State", "type": "main", "index": 0 },
           { "node": "Respond to Webhook", "type": "main", "index": 0 }
+        ]
+      ],
+      "error": [
+        [
+          { "node": "Error Response", "type": "main", "index": 0 }
         ]
       ]
     }
