@@ -1,0 +1,114 @@
+{
+  "name": "CANVAS Approve/Reject",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "canvas-approve",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "b2c3d4e5-f001-5001-9001-000000000001",
+      "name": "Approve Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ── Validate Approval Webhook Input ──\nconst body = $input.first().json.body;\n\nif (!body.session_id) {\n  throw new Error('Missing required field: session_id');\n}\n\nconst validDecisions = ['approve', 'modify', 'reject'];\nconst decision = (body.decision || '').toLowerCase();\n\nif (!validDecisions.includes(decision)) {\n  throw new Error(`Invalid decision \"${decision}\". Must be one of: ${validDecisions.join(', ')}`);\n}\n\nreturn [{\n  json: {\n    session_id: body.session_id,\n    decision: decision,\n    filePath: `./canvas-state/${body.session_id}.json`\n  }\n}];"
+      },
+      "id": "b2c3d4e5-f002-5002-9002-000000000002",
+      "name": "Validate Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [550, 300]
+    },
+    {
+      "parameters": {
+        "filePath": "={{ $json.filePath }}",
+        "options": {}
+      },
+      "id": "b2c3d4e5-f003-5003-9003-000000000003",
+      "name": "Read Session State",
+      "type": "n8n-nodes-base.readBinaryFile",
+      "typeVersion": 1,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ── Process Approval Decision ──\nconst sessionState = $input.first().json;\nconst decision = $('Validate Input').first().json.decision;\nconst sessionId = $('Validate Input').first().json.session_id;\n\nlet updatedState = { ...sessionState };\nlet response;\n\nswitch (decision) {\n  case 'approve':\n    updatedState.status = 'running';\n    updatedState.approved_at = new Date().toISOString();\n    response = {\n      session_id: sessionId,\n      status: 'approved',\n      next: 'agents_dispatched',\n      goal: sessionState.goal,\n      tasks: sessionState.tasks,\n      message: `Session ${sessionId} approved. ${sessionState.tasks.length} agent(s) will be dispatched.`\n    };\n    break;\n\n  case 'reject':\n    updatedState.status = 'rejected';\n    updatedState.rejected_at = new Date().toISOString();\n    response = {\n      session_id: sessionId,\n      status: 'rejected',\n      message: `Session ${sessionId} has been rejected.`\n    };\n    break;\n\n  case 'modify':\n    updatedState.status = 'modification_requested';\n    updatedState.modified_at = new Date().toISOString();\n    response = {\n      session_id: sessionId,\n      status: 'modification_requested',\n      message: `Session ${sessionId} requires modification. Please re-submit with adjusted brief.`\n    };\n    break;\n}\n\nreturn [{\n  json: {\n    ...response,\n    updatedState: updatedState\n  }\n}];"
+      },
+      "id": "b2c3d4e5-f004-5004-9004-000000000004",
+      "name": "Process Decision",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1150, 300]
+    },
+    {
+      "parameters": {
+        "fileName": "={{ $json.updatedState.session_id }}.json",
+        "dataPropertyName": "updatedState",
+        "options": {}
+      },
+      "id": "b2c3d4e5-f005-5004-9004-000000000005",
+      "name": "Update Session State",
+      "type": "n8n-nodes-base.writeBinaryFile",
+      "typeVersion": 1,
+      "position": [1450, 150]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"session_id\": \"{{ $json.session_id }}\",\n  \"status\": \"{{ $json.status }}\",\n  \"next\": \"{{ $json.next }}\",\n  \"goal\": \"{{ $json.goal }}\",\n  \"tasks\": {{ JSON.stringify($json.tasks || []) }},\n  \"message\": \"{{ $json.message }}\"\n}",
+        "options": {}
+      },
+      "id": "b2c3d4e5-f006-5004-9004-000000000006",
+      "name": "Respond Approval",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1450, 450]
+    }
+  ],
+  "connections": {
+    "Approve Webhook": {
+      "main": [
+        [
+          { "node": "Validate Input", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Validate Input": {
+      "main": [
+        [
+          { "node": "Read Session State", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Read Session State": {
+      "main": [
+        [
+          { "node": "Process Decision", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Process Decision": {
+      "main": [
+        [
+          { "node": "Update Session State", "type": "main", "index": 0 },
+          { "node": "Respond Approval", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "versionId": "1.0.0",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "meta": {
+    "instanceId": "canvas-approve"
+  }
+}

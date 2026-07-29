@@ -1,0 +1,114 @@
+{
+  "name": "CANVAS Orchestrator",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "canvas-orchestrate",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "a1b2c3d4-e001-4001-8001-000000000001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:1234/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"model\": \"qwen/qwen3.5-27b-q6_k_l\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You are a creative project orchestrator for CANVAS agency. Given a creative brief, decompose it into specific tasks for specialist agents. Return ONLY valid JSON, no preamble.\\n\\nAgents: research_agent, writer_agent, code_agent, data_agent, dataviz_agent, td_agent, critique_agent, qa_agent\\n\\nSchema:\\n{\\n  \\\"goal\\\": \\\"one sentence summary\\\",\\n  \\\"tasks\\\": [{ \\\"agent\\\": \\\"\\\", \\\"task\\\": \\\"\\\", \\\"depends_on\\\": [], \\\"parallel_with\\\": [] }],\\n  \\\"approval_required\\\": true,\\n  \\\"approval_question\\\": \\\"question for human\\\",\\n  \\\"confidence\\\": 0-100\\n}\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"={{ $json.body.prompt }}\"\n    }\n  ],\n  \"temperature\": 0.3,\n  \"max_tokens\": 4096,\n  \"stream\": false\n}",
+        "options": {
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "a1b2c3d4-e002-4002-8002-000000000002",
+      "name": "LM Studio Chat",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [550, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ── Parse & Validate Orchestrator Response ──\nconst httpResponse = $input.first().json;\n\n// Extract the assistant's message from the LM Studio response\nlet rawContent = '';\ntry {\n  rawContent = httpResponse.choices[0].message.content;\n} catch (e) {\n  throw new Error('Invalid LM Studio response format: missing choices[0].message.content');\n}\n\n// Clean the response — strip markdown code fences if present\nlet cleaned = rawContent.trim();\nif (cleaned.startsWith('```')) {\n  cleaned = cleaned.replace(/^```(?:json)?\\s*/i, '').replace(/\\s*```$/, '').trim();\n}\n\n// Parse JSON\nlet parsed;\ntry {\n  parsed = JSON.parse(cleaned);\n} catch (e) {\n  throw new Error(`Failed to parse orchestrator JSON: ${e.message}\\nRaw: ${rawContent.substring(0, 500)}`);\n}\n\n// Validate required top-level fields\nconst requiredFields = ['goal', 'tasks', 'approval_required', 'confidence'];\nconst missing = requiredFields.filter(f => !(f in parsed));\nif (missing.length > 0) {\n  throw new Error(`Missing required fields: ${missing.join(', ')}`);\n}\n\n// Validate tasks array\nif (!Array.isArray(parsed.tasks)) {\n  throw new Error('\"tasks\" must be an array');\n}\nif (parsed.tasks.length === 0) {\n  throw new Error('\"tasks\" array is empty — at least one task is required');\n}\n\nconst validAgents = ['research_agent', 'writer_agent', 'code_agent', 'data_agent', 'dataviz_agent', 'td_agent', 'critique_agent', 'qa_agent'];\nfor (let i = 0; i < parsed.tasks.length; i++) {\n  const task = parsed.tasks[i];\n  if (!task.agent || !validAgents.includes(task.agent)) {\n    throw new Error(`Task ${i}: invalid or missing agent \"${task.agent}\". Must be one of: ${validAgents.join(', ')}`);\n  }\n  if (!task.task || typeof task.task !== 'string') {\n    throw new Error(`Task ${i}: missing or invalid \"task\" description`);\n  }\n  // Ensure depends_on and parallel_with are arrays\n  if (!Array.isArray(task.depends_on)) task.depends_on = [];\n  if (!Array.isArray(task.parallel_with)) task.parallel_with = [];\n}\n\n// Validate confidence\nif (typeof parsed.confidence !== 'number' || parsed.confidence < 0 || parsed.confidence > 100) {\n  throw new Error('\"confidence\" must be a number between 0 and 100');\n}\n\n// Check confidence threshold from input\nconst threshold = $input.first().json.body?.confidence_threshold ?? 50;\nif (parsed.confidence < threshold) {\n  throw new Error(`Confidence (${parsed.confidence}) is below threshold (${threshold}). Refusing to proceed.`);\n}\n\n// Enrich with session metadata\nconst enriched = {\n  ...parsed,\n  session_id: $input.first().json.body?.session_id || ('canvas-' + Date.now()),\n  mode: $input.first().json.body?.mode || 'collaborative',\n  status: 'awaiting_approval',\n  created_at: new Date().toISOString(),\n  orchestrator_model: 'qwen/qwen3.5-27b-q6_k_l'\n};\n\nreturn [{ json: enriched }];"
+      },
+      "id": "a1b2c3d4-e003-4003-8003-000000000003",
+      "name": "Parse & Validate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "fileName": "=/canvas-state/{{ $json.session_id }}.json",
+        "dataPropertyName": "data",
+        "options": {}
+      },
+      "id": "a1b2c3d4-e004-4004-8004-000000000004",
+      "name": "Write Session State",
+      "type": "n8n-nodes-base.writeBinaryFile",
+      "typeVersion": 1,
+      "position": [1150, 150]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"session_id\": \"{{ $json.session_id }}\",\n  \"status\": \"{{ $json.status }}\",\n  \"goal\": \"{{ $json.goal }}\",\n  \"tasks\": {{ JSON.stringify($json.tasks) }},\n  \"approval_required\": {{ $json.approval_required }},\n  \"approval_question\": \"{{ $json.approval_question }}\",\n  \"confidence\": {{ $json.confidence }},\n  \"mode\": \"{{ $json.mode }}\"\n}",
+        "options": {}
+      },
+      "id": "a1b2c3d4-e005-4005-8005-000000000005",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1150, 500]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          { "node": "LM Studio Chat", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "LM Studio Chat": {
+      "main": [
+        [
+          { "node": "Parse & Validate", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Parse & Validate": {
+      "main": [
+        [
+          { "node": "Write Session State", "type": "main", "index": 0 },
+          { "node": "Respond to Webhook", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "versionId": "1.0.0",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "meta": {
+    "instanceId": "canvas-orchestrator"
+  }
+}
